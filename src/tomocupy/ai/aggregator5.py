@@ -284,15 +284,15 @@ class VisionTransformerAggregator(nn.Module):
         return x, positions
 
 
-    def forward(self, x: Tensor) -> Tuple[List[Tensor], int]:
+    def forward(self, x: Tensor, is_causal: bool = False) -> Tuple[List[Tensor], int]:
         x_shape_ = x.shape
         x = rearrange(x,'b r s h w c -> (b r) (s h w) c')
         x, positions = self._pos_embed(x, x_shape_)
 
         for blk in self.global_blocks:
             if self.training:
-                x = checkpoint(blk, x, positions, use_reentrant=self.use_reentrant)
+                x = checkpoint(blk, x, is_causal, positions, use_reentrant=self.use_reentrant)
             else:
-                x = blk(x, pos=positions)
+                x = blk(x, is_causal=is_causal, pos=positions)
         x = rearrange(x, '(b r) n c -> b r n c',r=x_shape_[1])
         return x, self.num_prefix_tokens

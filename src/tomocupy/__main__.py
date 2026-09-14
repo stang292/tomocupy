@@ -268,7 +268,7 @@ def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=
             log.error(f"Number of bins to search should be even: got {bin_count} instead.")
             exit()
         log.info(f"Level {i+1}: search range is {bin_count} bins each of {bin_size} pixels")
-        args.center_search_step = float(bin_size)
+        args.center_search_step = float(bin_size) / 2**args.binning
         args.center_search_width = float(bin_count) / 2 * float(bin_size)
         args.bin_infer_bin_size = float(bin_size)
             
@@ -296,7 +296,7 @@ def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=
         if save_test_results_ok:
             results_all[f"Stage 1 level {i+1}"] = results
             results_all[f"Stage 1 level {i+1}"].pop("preprocessed_cache", None)
-        # log.info(f"Level {i+1}: refined range is ({center_lb},{center_ub})")
+        log.info(f"Level {i+1}: refined range is ({center_lb},{center_ub})")
     args.center_search_step = center_search_step
     args.center_search_width = (center_ub-center_lb)/2
 
