@@ -709,7 +709,7 @@ SECTIONS['bin-inference'] = {
         'help': "Downsample factor applied to the try reconstruction slices"
     },
     'bin-infer-num-windows': {
-        'default': [20],
+        'default': [10],
         'type': list_of_ints,
         'help': "Number of windows to aggregate try recon image features"
     },
