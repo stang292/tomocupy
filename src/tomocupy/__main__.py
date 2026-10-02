@@ -257,23 +257,32 @@ def run_recsteps(args, cl_reader, cl_writer, save_test_results_ok:bool = False, 
     return results
 
 def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=False,export_results_ok=False):
+    import numpy as np
     if len(args.bin_infer_bin_sizes) != len(args.bin_infer_bin_counts):
         log.error(f"Numbers of bin sizes and bin counts do not match: got {len(args.bin_infer_bin_sizes)} and {len(args.bin_infer_bin_counts)}, respectively.")
         exit()
     args.symmetric_center_search = True
     args.clear_folder = 'True'
     center_search_step = args.center_search_step
+    if args.use_relative_bin_size and any(np.array(args.bin_infer_bin_sizes)>1):
+        log.error(f"bin-infer-bin-sizes are set to {args.bin_infer_bin_sizes}. All elements are required to be in the range of 0 to 1.")
+        exit()
+
     for i, (bin_size, bin_count) in enumerate(zip(args.bin_infer_bin_sizes,args.bin_infer_bin_counts)):
         if bin_count%2 != 0:
             log.error(f"Number of bins to search should be even: got {bin_count} instead.")
             exit()
-        log.info(f"Level {i+1}: search range is {bin_count} bins each of {bin_size} pixels")
+        
         args.center_search_step = float(bin_size) / 2**args.binning
         args.center_search_width = float(bin_count) / 2 * float(bin_size)
-        args.bin_infer_bin_size = float(bin_size)
-            
         cl_reader = reader.Reader()
         cl_writer = writer.Writer()
+        if args.use_relative_bin_size:
+            log.info(f"Level {i+1}: search range is {bin_count} bins each of {bin_size*params.ni} pixels")
+            args.bin_infer_bin_size = float(np.int64(bin_size * params.ni))
+        else:
+            log.info(f"Level {i+1}: search range is {bin_count} bins each of {bin_size} pixels")
+            args.bin_infer_bin_size = float(bin_size)
         
         if args._func == run_rec:
             results = run_rec_presteps(args, cl_reader, cl_writer, save_test_results_ok = save_test_results_ok)
@@ -290,8 +299,12 @@ def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=
             
             if i == 0 and cache_preprocessed: 
                 preprocessed_cache = results['preprocessed_cache']
-        center_lb = results['center_lb']
-        center_ub = results['center_ub']
+        if i == (len(args.bin_infer_bin_sizes)-1):
+            center_lb = np.floor(results['center_lb'])
+            center_ub = np.ceil(results['center_ub'])
+        else:
+            center_lb = results['center_lb']
+            center_ub = results['center_ub']
         args.rotation_axis = (center_lb+center_ub)/2
         if save_test_results_ok:
             results_all[f"Stage 1 level {i+1}"] = results
@@ -299,7 +312,9 @@ def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=
         log.info(f"Level {i+1}: refined range is ({center_lb},{center_ub})")
     args.center_search_step = center_search_step
     args.center_search_width = (center_ub-center_lb)/2
-
+    if args.use_relative_bin_size:
+        log.info(f"Relative bin size is disabled for fine search.")
+        args.use_relative_bin_size = False
     args.symmetric_center_search = False
     cl_reader = reader.Reader()
     cl_writer = writer.Writer()
@@ -319,6 +334,9 @@ def try_recon_ai_full(results_all,save_test_results_ok=False,cache_preprocessed=
             json.dump(results_all, f, indent=4, ensure_ascii=False)
 
 def recon(results_all,save_test_results_ok=False,export_results_ok=False):
+    if args.use_relative_bin_size:
+        log.info("Relative bin size is disabled for fine search.")
+        args.use_relative_bin_size = False
     cl_reader = reader.Reader()
     cl_writer = writer.Writer()
     results = args._func(args, cl_reader, cl_writer, save_test_results_ok = save_test_results_ok)
@@ -419,7 +437,6 @@ def main():
                 params.__dict__.update(params_dict)
                 args.rotation_axis = rotation_axis
                 recon(results_all,save_test_results_ok=save_test_results_ok,export_results_ok=save_test_results_ok)
-
             elif ((args._func == run_rec) or (args._func == run_recsteps)) and (args.rotation_axis_method == 'ai') and (args.ai_search_method == 'fine') and (args.reconstruction_type == 'full'):
                 from copy import deepcopy
                 args_dict = deepcopy(args.__dict__)
@@ -437,6 +454,9 @@ def main():
             elif (args._func == run_rec) or (args._func == run_recsteps):
                 recon(results_all,save_test_results_ok=save_test_results_ok,export_results_ok=save_test_results_ok)
             else:
+                if args.use_relative_bin_size:
+                    log.info(f"Relative bin size is disabled when ai search method is set to fine.")
+                    args.use_relative_bin_size = False
                 cl_reader = reader.Reader()
                 cl_writer = writer.Writer()
                 args._func(args, cl_reader, cl_writer)
